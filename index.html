@@ -243,18 +243,18 @@
         <div class="header">
             <h1>Kurwactionary</h1>
             <div class="search-container">
-                <input type="text" class="search-input" placeholder="Wyszukaj słowo..." id="searchInput" />
+                <input type="text" class="search-input" placeholder="Search word..." id="searchInput" />
             </div>
         </div>
 
         <div class="main-content">
             <div class="tree-container" id="treeContainer">
-                <div class="no-word">Ładowanie...</div>
+                <div class="no-word">Loading...</div>
             </div>
 
             <div class="definition-panel" id="definitionPanel">
-                <h2>Wybierz słowo</h2>
-                <p class="definition-text">Kliknij na dowolne słowo w drzewie, aby zobaczyć jego definicję.</p>
+                <h2>Select a word</h2>
+                <p class="definition-text">Click any word in the tree to see its definition.</p>
             </div>
         </div>
     </div>
@@ -277,7 +277,7 @@
            ----------------------------- */
         async function loadData() {
             const container = document.getElementById('treeContainer');
-            container.innerHTML = '<div class="no-word">Ładowanie…</div>';
+            container.innerHTML = '<div class="no-word">Loading…</div>';
 
             try {
                 const res = await fetch(GIST_RAW_URL, { cache: 'no-cache' });
@@ -286,7 +286,7 @@
                 renderTree();
             } catch (err) {
                 console.error(err);
-                container.innerHTML = '<div class="no-word">Błąd podczas pobierania danych z Gista.</div>';
+                container.innerHTML = '<div class="no-word">Error fetching data.</div>';
             }
         }
 
@@ -327,7 +327,7 @@
                 });
 
             if (!matches.length) {
-                container.innerHTML = '<div class="no-word">Brak wyników</div>';
+                container.innerHTML = '<div class="no-word">No results</div>';
                 return;
             }
 
@@ -351,7 +351,7 @@
         function renderDefaultTree(container, parent, level) {
             const kids = getChildren(parent);
             if (!kids.length && level === 0) {
-                container.innerHTML = '<div class="no-word">Brak danych do wyświetlenia</div>';
+                container.innerHTML = '<div class="no-word">No data to display</div>';
                 return;
             }
 
@@ -377,7 +377,7 @@
                                     if (gg.length > 3) {
                                         const more = document.createElement('div');
                                         more.className = 'word-node';
-                                        more.textContent = `+${gg.length - 3} więcej…`;
+                                        more.textContent = `+${gg.length - 3} more…`;
                                         more.style.opacity = 0.5;
                                         sub.appendChild(more);
                                     }
@@ -425,7 +425,7 @@
                        </div>`
                     : ''}
                 ${w.parent && w.parent !== 'root'
-                    ? `<p>Rodzic: <a href="#" class="parent-link" data-parent="${w.parent}">${w.parent}</a></p>`
+                    ? `<p>Parent: <a href="#" class="parent-link" data-parent="${w.parent}">${w.parent}</a></p>`
                     : ''}
             `;
 
@@ -451,7 +451,7 @@
             renderTree(currentWord);
             document.getElementById('definitionPanel').innerHTML = currentWord
                 ? ''
-                : `<h2>Wybierz słowo</h2><p class="definition-text">Kliknij na dowolne słowo w drzewie, aby zobaczyć jego definicję.</p>`;
+                : `<h2>Select a word</h2><p class="definition-text">Click any word in the tree to see its definition.</p>`;
         });
 
         /* -----------------------------
