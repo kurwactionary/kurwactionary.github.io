@@ -10,7 +10,8 @@
     const state = {
         words: [],
         currentWord: null,
-        searchTerm: ''
+        searchTerm: '',
+        prefetchedDefinition: null
     };
 
     // --- DOM ELEMENTS ---
@@ -84,6 +85,12 @@
     }
 
     function renderDefinitionPanel() {
+        if (state.prefetchedDefinition) {
+            dom.definitionPanel.innerHTML = state.prefetchedDefinition;
+            state.prefetchedDefinition = null; // Clear after use
+            return;
+        }
+
         dom.definitionPanel.innerHTML = ''; // Clear existing content
 
         if (!state.currentWord) {
@@ -96,40 +103,27 @@
             return;
         }
 
-        const { word, definition, tags, parent } = state.currentWord;
+        dom.definitionPanel.innerHTML = generateDefinitionHTML(state.currentWord);
+    }
 
-        const h2 = document.createElement('h2');
-        h2.textContent = word;
+    function generateDefinitionHTML(wordData) {
+        if (!wordData) return '';
 
-        const p = document.createElement('p');
-        p.className = 'definition-text';
-        p.textContent = definition;
-
-        dom.definitionPanel.append(h2, p);
+        const { word, definition, tags, parent } = wordData;
+        let html = `<h2>${word}</h2><p class="definition-text">${definition}</p>`;
 
         if (tags && tags.length > 0) {
-            const tagsContainer = document.createElement('div');
-            tagsContainer.className = 'tags-container';
+            html += `<div class="tags-container">`;
             tags.forEach(tag => {
-                const tagElement = document.createElement('span');
-                tagElement.className = 'tag';
-                tagElement.textContent = tag;
-                tagsContainer.appendChild(tagElement);
+                html += `<span class="tag">${tag}</span>`;
             });
-            dom.definitionPanel.appendChild(tagsContainer);
+            html += `</div>`;
         }
 
         if (parent && parent !== 'root') {
-            const parentP = document.createElement('p');
-            parentP.innerHTML = 'Parent: ';
-            const parentLink = document.createElement('a');
-            parentLink.href = '#';
-            parentLink.className = 'parent-link';
-            parentLink.textContent = parent;
-            parentLink.dataset.parent = parent;
-            parentP.appendChild(parentLink);
-            dom.definitionPanel.appendChild(parentP);
+            html += `<p>Parent: <a href="#" class="parent-link" data-parent="${parent}">${parent}</a></p>`;
         }
+        return html;
     }
 
 
@@ -153,10 +147,27 @@
         renderTree();
     }, SEARCH_DEBOUNCE_DELAY);
 
+    function handleTreeMouseover(event) {
+        const target = event.target;
+        if (target.classList.contains('word-node')) {
+            const word = target.dataset.word;
+            const wordData = findWord(word);
+            state.prefetchedDefinition = generateDefinitionHTML(wordData);
+        }
+    }
+
+    function handleTreeMouseout(event) {
+        const target = event.target;
+        if (target.classList.contains('word-node')) {
+            state.prefetchedDefinition = null;
+        }
+    }
 
     // --- INITIALIZATION ---
     function init() {
         dom.treeContainer.addEventListener('click', handleTreeClick);
+        dom.treeContainer.addEventListener('mouseover', handleTreeMouseover);
+        dom.treeContainer.addEventListener('mouseout', handleTreeMouseout);
         dom.searchInput.addEventListener('input', handleSearchInput);
         loadData();
     }
