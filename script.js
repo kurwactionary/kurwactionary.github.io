@@ -1,198 +1,166 @@
-/* -----------------------------
-           CONFIGURATION – change only this
-           ----------------------------- */
-        const GIST_RAW_URL = 'https://gist.githubusercontent.com/kurwactionary/92207b218aaa06edc45ca193bdbac840/raw/52e15cc9e219e04ff0e0127058bf3a1326a2cc5e/dictionary.json'
-        
-        /* -----------------------------
-           STATE
-           ----------------------------- */
-        let wordsData = [];
-        let currentWord = null;
-        let searchTerm = '';
 
-        /* -----------------------------
-           LOAD DATA FROM GIST
-           ----------------------------- */
-        async function loadData() {
-            const container = document.getElementById('treeContainer');
-            container.innerHTML = '<div class="no-word">Loading…</div>';
+(function() {
+    'use strict';
 
-            try {
-                const res = await fetch(GIST_RAW_URL, { cache: 'no-cache' });
-                if (!res.ok) throw new Error(res.status);
-                wordsData = await res.json();
-                renderTree();
-            } catch (err) {
-                console.error(err);
-                container.innerHTML = '<div class="no-word">Error fetching data.</div>';
-            }
+    // --- CONFIGURATION ---
+    const GIST_RAW_URL = 'https://gist.githubusercontent.com/kurwactionary/92207b218aaa06edc45ca193bdbac840/raw/52e15cc9e219e04ff0e0127058bf3a1326a2cc5e/dictionary.json';
+    const SEARCH_DEBOUNCE_DELAY = 250;
+
+    // --- STATE ---
+    const state = {
+        words: [],
+        currentWord: null,
+        searchTerm: ''
+    };
+
+    // --- DOM ELEMENTS ---
+    const dom = {
+        treeContainer: document.getElementById('treeContainer'),
+        definitionPanel: document.getElementById('definitionPanel'),
+        searchInput: document.getElementById('searchInput')
+    };
+
+    // --- UTILITIES ---
+    const debounce = (func, delay) => {
+        let timeoutId;
+        return (...args) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => func.apply(this, args), delay);
+        };
+    };
+
+    // --- DATA ---
+    async function loadData() {
+        try {
+            const response = await fetch(GIST_RAW_URL, { cache: 'no-cache' });
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            state.words = await response.json();
+            render();
+        } catch (error) {
+            console.error('Failed to load dictionary:', error);
+            dom.treeContainer.innerHTML = '<div class="no-word">Error loading data. Please try again later.</div>';
         }
+    }
 
-        /* -----------------------------
-           TREE HELPERS (unchanged logic)
-           ----------------------------- */
-        function getChildren(parent) {
-            return wordsData.filter(w => w.parent === parent);
-        }
+    // --- LOGIC ---
+    const getChildren = (parent) => state.words.filter(w => w.parent === parent);
+    const findWord = (word) => state.words.find(w => w.word.toLowerCase() === word.toLowerCase());
 
-        function findWord(word) {
-            return wordsData.find(w => w.word.toLowerCase() === word.toLowerCase());
-        }
+    // --- RENDERING ---
+    function render() {
+        renderTree();
+        renderDefinitionPanel();
+    }
 
-        /* -----------------------------
-           RENDERING
-           ----------------------------- */
-        function renderTree(focusWord = null) {
-            const container = document.getElementById('treeContainer');
-            container.innerHTML = '';
+    function renderTree() {
+        dom.treeContainer.innerHTML = ''; // Clear existing tree
 
-            if (searchTerm) {
-                renderSearchResults(container, focusWord);
+        if (state.searchTerm) {
+            const searchResults = state.words.filter(w => w.word.toLowerCase().includes(state.searchTerm));
+            if (searchResults.length > 0) {
+                searchResults.forEach(word => dom.treeContainer.appendChild(createWordElement(word)));
             } else {
-                renderDefaultTree(container, 'root', 0);
+                dom.treeContainer.innerHTML = '<div class="no-word">No results found.</div>';
+            }
+        } else {
+            const rootWords = getChildren('root');
+            if (rootWords.length > 0) {
+                rootWords.forEach(word => dom.treeContainer.appendChild(createWordElement(word)));
+            } else {
+                dom.treeContainer.innerHTML = '<div class="no-word">No words to display.</div>';
             }
         }
+    }
 
-        function renderSearchResults(container, focusWord) {
-            const matches = wordsData
-                .filter(w => w.word.toLowerCase().includes(searchTerm))
-                .sort((a, b) => {
-                    const aStart = a.word.toLowerCase().startsWith(searchTerm);
-                    const bStart = b.word.toLowerCase().startsWith(searchTerm);
-                    if (aStart && !bStart) return -1;
-                    if (!aStart && bStart) return 1;
-                    return a.word.localeCompare(b.word);
-                });
+    function createWordElement(wordData) {
+        const element = document.createElement('div');
+        element.className = 'word-node';
+        element.textContent = wordData.word;
+        element.dataset.word = wordData.word;
+        if (state.currentWord && wordData.word === state.currentWord.word) {
+            element.classList.add('active');
+        }
+        return element;
+    }
 
-            if (!matches.length) {
-                container.innerHTML = '<div class="no-word">No results</div>';
-                return;
-            }
+    function renderDefinitionPanel() {
+        dom.definitionPanel.innerHTML = ''; // Clear existing content
 
-            const byParent = {};
-            matches.forEach(w => {
-                (byParent[w.parent] ||= []).push(w);
+        if (!state.currentWord) {
+            const h2 = document.createElement('h2');
+            h2.textContent = 'Select a word';
+            const p = document.createElement('p');
+            p.className = 'definition-text';
+            p.textContent = 'Click any word in the tree to see its definition.';
+            dom.definitionPanel.append(h2, p);
+            return;
+        }
+
+        const { word, definition, tags, parent } = state.currentWord;
+
+        const h2 = document.createElement('h2');
+        h2.textContent = word;
+
+        const p = document.createElement('p');
+        p.className = 'definition-text';
+        p.textContent = definition;
+
+        dom.definitionPanel.append(h2, p);
+
+        if (tags && tags.length > 0) {
+            const tagsContainer = document.createElement('div');
+            tagsContainer.className = 'tags-container';
+            tags.forEach(tag => {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'tag';
+                tagElement.textContent = tag;
+                tagsContainer.appendChild(tagElement);
             });
-
-            Object.entries(byParent).forEach(([parent, children]) => {
-                const parentObj = findWord(parent) || { word: parent };
-                const pDiv = createWordElement(parentObj, parent === focusWord);
-                container.appendChild(pDiv);
-
-                const level = document.createElement('div');
-                level.className = 'level';
-                children.forEach(c => level.appendChild(createWordElement(c, c.word === focusWord)));
-                container.appendChild(level);
-            });
+            dom.definitionPanel.appendChild(tagsContainer);
         }
 
-        function renderDefaultTree(container, parent, level) {
-            const kids = getChildren(parent);
-            if (!kids.length && level === 0) {
-                container.innerHTML = '<div class="no-word">No data to display</div>';
-                return;
-            }
-
-            kids.forEach(kid => {
-                container.appendChild(createWordElement(kid, kid.word === currentWord));
-
-                if (level < 2) {
-                    const grand = getChildren(kid.word);
-                    if (grand.length) {
-                        const levelDiv = document.createElement('div');
-                        levelDiv.className = 'level';
-                        grand.forEach(g => levelDiv.appendChild(createWordElement(g, g.word === currentWord)));
-
-                        if (level < 1) {
-                            grand.forEach(g => {
-                                const gg = getChildren(g.word);
-                                if (gg.length) {
-                                    const sub = document.createElement('div');
-                                    sub.className = 'level';
-                                    gg.slice(0, 3).forEach(ggChild =>
-                                        sub.appendChild(createWordElement(ggChild, ggChild.word === currentWord))
-                                    );
-                                    if (gg.length > 3) {
-                                        const more = document.createElement('div');
-                                        more.className = 'word-node';
-                                        more.textContent = `+${gg.length - 3} more…`;
-                                        more.style.opacity = 0.5;
-                                        sub.appendChild(more);
-                                    }
-                                    levelDiv.appendChild(sub);
-                                }
-                            });
-                        }
-                        container.appendChild(levelDiv);
-                    }
-                }
-            });
+        if (parent && parent !== 'root') {
+            const parentP = document.createElement('p');
+            parentP.innerHTML = 'Parent: ';
+            const parentLink = document.createElement('a');
+            parentLink.href = '#';
+            parentLink.className = 'parent-link';
+            parentLink.textContent = parent;
+            parentLink.dataset.parent = parent;
+            parentP.appendChild(parentLink);
+            dom.definitionPanel.appendChild(parentP);
         }
+    }
 
-        function createWordElement(wordData, active = false) {
-            const div = document.createElement('div');
-            div.className = 'word-node' + (active ? ' active' : '');
-            div.textContent = wordData.word;
-            div.dataset.word = wordData.word;
 
-            if (searchTerm && !wordData.word.toLowerCase().startsWith(searchTerm))
-                div.classList.add('hidden');
-
-            div.addEventListener('click', () => selectWord(wordData.word));
-            return div;
+    // --- EVENT HANDLERS ---
+    function handleTreeClick(event) {
+        const target = event.target;
+        if (target.classList.contains('word-node')) {
+            const word = target.dataset.word;
+            state.currentWord = findWord(word);
+            render();
+        } else if (target.classList.contains('parent-link')) {
+            event.preventDefault();
+            const parentWord = target.dataset.parent;
+            state.currentWord = findWord(parentWord);
+            render();
         }
+    }
 
-        /* -----------------------------
-           DEFINITION PANEL
-           ----------------------------- */
-        function selectWord(word) {
-            currentWord = word;
-            const w = findWord(word);
-            if (!w) return;
+    const handleSearchInput = debounce(event => {
+        state.searchTerm = event.target.value.trim().toLowerCase();
+        renderTree();
+    }, SEARCH_DEBOUNCE_DELAY);
 
-            document.querySelectorAll('.word-node').forEach(n =>
-                n.classList.toggle('active', n.dataset.word === word)
-            );
 
-            document.getElementById('definitionPanel').innerHTML = `
-                <h2>${w.word}</h2>
-                <p class="definition-text">${w.definition}</p>
-                ${(w.tags || []).length
-                    ? `<div class="tags-container">
-                         ${w.tags.map(t => `<span class="tag">${t}</span>`).join('')}
-                       </div>`
-                    : ''}
-                ${w.parent && w.parent !== 'root'
-                    ? `<p>Parent: <a href="#" class="parent-link" data-parent="${w.parent}">${w.parent}</a></p>`
-                    : ''}
-            `;
-
-            const parentLink = document.querySelector('.parent-link');
-            if (parentLink) {
-                parentLink.addEventListener('click', e => {
-                    e.preventDefault();
-                    selectWord(parentLink.dataset.parent);
-                });
-            }
-
-            renderTree(word);
-        }
-
-        /* -----------------------------
-           SEARCH INPUT
-           ----------------------------- */
-        document.getElementById('searchInput').addEventListener('input', e => {
-            searchTerm = e.target.value.trim().toLowerCase();
-            if (!searchTerm) {
-                currentWord = null;
-            }
-            renderTree(currentWord);
-            document.getElementById('definitionPanel').innerHTML = currentWord
-                ? ''
-                : `<h2>Select a word</h2><p class="definition-text">Click any word in the tree to see its definition.</p>`;
-        });
-
-        /* -----------------------------
-           INITIAL LOAD
-           ----------------------------- */
+    // --- INITIALIZATION ---
+    function init() {
+        dom.treeContainer.addEventListener('click', handleTreeClick);
+        dom.searchInput.addEventListener('input', handleSearchInput);
         loadData();
+    }
+
+    init();
+
+})();
